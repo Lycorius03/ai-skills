@@ -4,17 +4,22 @@
 
 **核心理念：** 将高频任务的提示词工程封装为文件，一次编写、反复使用、版本管理、团队共享。
 
+## 快速开始
+
+```bash
+git clone https://github.com/<user>/ai-skills.git
+```
+
 ## 目录结构
 
 ```
 .skills/
 ├── README.md
 └── academic-paper-prompt-workflow/
-    ├── SKILL.md                                          ← skill 主文件
-    └── academic-paper-prompt-workflow-SKILL-clean.md      ← 精修版（供阅读参考）
+    └── SKILL.md
 ```
 
-`SKILL.md` 是实际工作的入口，`*-clean.md` 是保留的原始精修版本，便于日后对比和更新。
+> 部分 skill 目录下可能附带 `*-clean.md` 等保留副本，仅供维护者参考，使用者只需关注 `SKILL.md`。
 
 ## 已收录 Skill
 
@@ -33,9 +38,9 @@
 
 **格式规范覆盖：** 中文摘要 / 英文摘要 / 自动目录 / 正文（四级标题）/ 图表公式题注 / 参考文献 / 致谢 / 附录。分节页码（前置罗马 + 正文阿拉伯）、TOC 域、乱码检测。
 
-## 使用方式
+## 兼容性
 
-`SKILL.md` 本质为结构化 Prompt，可在支持系统指令或自定义 Agent 的任意大模型工具中使用。各平台兼容方式如下：
+`SKILL.md` 本质为结构化 Prompt，可在支持系统指令或自定义 Agent 的任意大模型工具中使用。
 
 ### 一、原生支持（自动加载）
 
