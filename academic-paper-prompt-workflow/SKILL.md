@@ -104,7 +104,9 @@ When asked to generate a paper-writing prompt, output a complete prompt using th
 9. 结论应回扣主题，概括发现，并指出局限或未来研究方向。
 
 【引用规范】
-1. 使用 Markdown 脚注格式，如 `[^1]`。
+1. 引用模式二选一（不可混用）：
+   - Mode A（推荐）：`[@key]` 语法 + citeproc 自动生成参考文献列表 [1], [2], ...
+   - Mode B：Markdown 脚注 `[^1]`，无编号参考文献列表
 2. 必须优先基于提供的参考文献/资料线索。
 3. 如果允许联网检索，可自动寻找 CNKI、官方文件、期刊网页、DOI 或高校库中的真实文献，但必须反复确认文献真实存在。
 4. 如果参考文献无法访问，可以基于题名合理推断其相关主题，但不得编造作者、期刊、年份、页码、具体数据或文献结论。
@@ -132,7 +134,7 @@ When asked to generate the Markdown paper:
 1. Build the final prompt from the template.
 2. Internally execute that prompt.
 3. Draft Markdown with clean heading levels.
-4. Use Markdown footnotes `[^n]` for citations.
+4. Apply the selected citation mode (Mode A: `[@key]` / Mode B: `[^n]` footnotes). Never mix modes.
 5. Keep claims evidence-conscious and avoid invented facts.
 6. Run the Markdown quality checklist before delivery.
 
@@ -148,6 +150,31 @@ When asked to generate the Markdown paper:
 - Footnotes use `[^n]` syntax.
 - No fabricated reference metadata appears.
 - No garbled text markers appear.
+
+## Markdown Writing Rules
+
+When producing or editing the Markdown paper, enforce these rules at source:
+
+- All math must be properly wrapped: inline `$...$`, display `$$...$$`.
+- No raw LaTeX outside math blocks.
+- All references must follow the selected citation mode (see Citation Mode below).
+
+## Citation Mode (Exclusive Choice)
+
+Choose ONE mode only per paper. Mixing is not allowed.
+
+### Mode A: Academic Standard (Recommended)
+
+- Use Pandoc citeproc with CSL (e.g., GB/T 7714, IEEE).
+- Citation syntax: `[@key]` in text.
+- Output: numbered references `[1]`, `[2]`, ...
+- Reference list generated automatically via `--citeproc --bibliography=refs.bib`.
+
+### Mode B: Footnote Mode
+
+- Use Markdown footnotes: `[^1]`.
+- No numbered reference list generated.
+- Suitable for short papers or when bib file is unavailable.
 
 ## Markdown To DOCX Thesis Workflow
 
@@ -227,13 +254,20 @@ Apply user-provided rules first. If the user gives the following common thesis s
 - Figure data source at lower left.
 - Table title above table, centered, 宋体五号, before/after 6 pt.
 - Table data source at lower left.
-- Equation centered; equation number right-aligned as `(1)`; no dash between equation and number.
+- Equations must:
+  - be Word native equation objects (OMML), not images;
+  - be centered;
+  - have right-aligned numbering as `(1)`, `(2)`, ...;
+  - support double-click editing in Word;
+  - have no dash or connector between equation and number.
+- Equation numbering must be automatic (via pandoc-crossref or Word fields). Manual typing of equation numbers is forbidden. All equation references in text must use `\@ref(eq:label)`.
 
 **References**
 
 - Header: 宋体五号, centered.
 - Title “参考文献”: 黑体小三, centered; before 30 pt, after 30 pt.
 - Reference body: Chinese 宋体五号; English Times New Roman 五号; exact line spacing 17 pt.
+- Reference numbering must be automatically generated via citeproc. Manual numbering is not allowed.
 - Use one consistent style, preferably GB/T 7714, APA, or IEEE.
 - Arabic page number continues from body.
 
@@ -265,7 +299,38 @@ When using Python, prefer `python-docx` for deterministic formatting. Use direct
 
 After creating the DOCX, open it in Microsoft Word or LibreOffice to update fields. In Word automation, update all fields and all tables of contents, then save.
 
-### 5. Verification Requirements
+### 5. Equation Handling (Critical)
+
+- Inline math must use `$...$`.
+- Display equations must use `$$...$$`.
+- Any equation requiring numbering must include a label: `$$ ... $$ {#eq:label}`.
+- All equations must be valid LaTeX math syntax.
+- During conversion, equations must be converted into Word native equation objects (OMML). Raw LaTeX must not appear in the final DOCX.
+- If any of the following appear in DOCX text body, treat as conversion failure: `\frac`, `\sum`, `\bar`, `\int`, `^`, `_`, or similar LaTeX command markers.
+
+### 6. Equation Numbering
+
+- Equation numbering must be automatic (pandoc-crossref preferred, or Word field-based).
+- Manual typing such as `(1)` in Markdown source is forbidden.
+- All in-text references to equations must use `\@ref(eq:label)` syntax.
+
+### 7. Pandoc Execution Standard
+
+Unless overridden by user requirements, use this fixed command:
+
+```
+pandoc input.md ^
+  --citeproc ^
+  --filter pandoc-crossref ^
+  --bibliography=refs.bib ^
+  --csl=gb7714-numeric.csl ^
+  --reference-doc=template.docx ^
+  -o output.docx
+```
+
+Append `--number-sections --toc --metadata=lang:zh-CN` for papers requiring TOC and auto-numbering.
+
+### 8. Verification Requirements
 
 Before delivering the DOCX, run repeated checks:
 
@@ -276,6 +341,7 @@ Before delivering the DOCX, run repeated checks:
    - TOC has clickable hyperlinks after field update.
    - Heading styles are used for TOC entries.
    - Page numbering switches from Roman to Arabic correctly.
+   - No plain-text LaTeX syntax appears in final DOCX.
 
 2. **Completeness check**
    - Compare source Markdown headings with DOCX headings.
@@ -290,12 +356,17 @@ Before delivering the DOCX, run repeated checks:
    ```
    Any nonzero result must trigger re-reading source as UTF-8 and regenerating/fixing the affected content.
 
-4. **Visual/render check**
+4. **Equation integrity check**
+   - No raw LaTeX commands (e.g., `\frac`, `\sum`, `\bar`, `\int`, `^`, `_`) should appear in DOCX body text.
+   - All equations must be: centered, editable Word equation objects (OMML), not images.
+   - Equation count must match between source Markdown and final DOCX.
+
+5. **Visual/render check**
    - Prefer rendering DOCX to PDF/PNG using LibreOffice or Word export.
    - Inspect representative pages: abstract, TOC, first body page, table page, references.
    - If rendering tools are unavailable, state that visual PNG QA could not be completed, but still report structural and text checks.
 
-### 6. Delivery Rules
+### 9. Delivery Rules
 
 For DOCX requests:
 
@@ -303,6 +374,29 @@ For DOCX requests:
 - Mention only relevant verification results.
 - Do not deliver intermediate PDFs/PNGs unless asked.
 - If visual rendering was impossible, say so plainly.
+
+### 10. Conversion Failure Recovery
+
+If any of the following are detected after conversion:
+
+- Raw LaTeX commands in DOCX body text
+- Broken or missing equations
+- Missing or unlinked references
+- TOC field not clickable
+- Page numbering broken
+
+Then execute this recovery sequence:
+
+1. Re-run Pandoc with the standard command from Section 7.
+2. Verify source Markdown UTF-8 encoding.
+3. Rebuild DOCX from clean Markdown.
+4. If the issue persists, isolate the affected section and regenerate it separately.
+
+### 11. Word Compatibility Guarantee
+
+- Output DOCX must be fully compatible with Microsoft Word.
+- No external rendering dependencies (e.g., MathJax, LaTeX images) required.
+- All fields (TOC, page numbers, cross-references) must update correctly via Word's "Update Fields" command.
 
 ## Anti-Garbled-Text Policy
 
