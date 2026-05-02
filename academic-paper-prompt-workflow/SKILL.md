@@ -43,18 +43,28 @@ Preserve exact reference links, titles, teacher requirements, and formatting rul
 
 Never fabricate authors, journal names, issue numbers, page ranges, data, empirical findings, or policy facts.
 
-When browsing/searching is available and allowed:
+### When browsing/searching is available and allowed
 
 1. Verify references through CNKI, DOI pages, journal sites, university repositories, publisher pages, or official policy/data pages.
 2. Prefer primary and official sources.
 3. If a reference cannot be accessed, search by exact title.
 4. Mark unverifiable items as usable only as topic clues.
 
-When browsing is unavailable:
+### When browsing is unavailable
 
 - Treat provided links/titles as “must-prioritize reference clues”.
 - Allow title-level thematic inference.
 - Do not invent concrete bibliographic metadata or conclusions.
+
+### Insufficient or missing references — web search authorized
+
+When the user provides zero references, or provided references are insufficient for a complete paper, agents **MAY** search the web (CNKI, DOI, journal sites, university repositories, official policy/data pages) to find real, verifiable literature. However:
+
+1. **Every web-found reference MUST be verified to actually exist** before it is cited in the paper. Open the DOI page or CNKI entry and confirm the title, author, journal, year, and abstract match.
+2. If a reference cannot be confirmed (paywalled, 404, no search results), **do not cite it**. Mark it as an unverifiable topic clue at most.
+3. References that pass verification must be written into the Markdown paper with their real, confirmed metadata — not fabricated or guessed.
+4. Policy documents, statistical yearbooks, and official reports must be confirmed against the issuing agency's official website or a trusted mirror.
+5. This authorization does NOT override the core rule: **never invent bibliographic metadata or empirical findings.**
 
 ## Final Prompt Generator
 
@@ -211,7 +221,19 @@ Use Word sections so front matter and body can have different page number format
 
 ### 3. Standard Formatting Rules
 
-Apply user-provided rules first. If the user gives the following common thesis standard, implement it exactly:
+Apply user-provided rules first. If the user gives the following common thesis standard, implement it exactly.
+
+#### 3.0 Mandatory: Explicit Black Color
+
+**All text in the final DOCX must have explicit `w:color w:val="000000"` (pure black).** This is non-negotiable for Chinese academic papers. Do NOT rely on Word's "auto" color — it is not the same as black and may render inconsistently across Word versions, PDF export, or print.
+
+Requirements:
+
+- Every `<w:r>` (run) in the DOCX must carry `<w:color w:val="000000"/>` in its `<w:rPr>`.
+- `<w:docDefaults>` in `word/styles.xml` must also carry `<w:color w:val="000000"/>` in `<w:rPrDefault><w:rPr>`.
+- After generating the DOCX (whether via Pandoc or python-docx), run a programmatic check scanning every run for the presence and value of `w:color`. Any missing or non-"000000" run is a defect.
+- If using Pandoc, the generated DOCX will NOT have this — python-docx post-processing (or XSLT) MUST add it.
+- If using python-docx to build the DOCX, set it on every run and in docDefaults from the start.
 
 **Chinese Abstract**
 
@@ -366,6 +388,13 @@ Before delivering the DOCX, run repeated checks:
    - Inspect representative pages: abstract, TOC, first body page, table page, references.
    - If rendering tools are unavailable, state that visual PNG QA could not be completed, but still report structural and text checks.
 
+6. **Color integrity check (MANDATORY)**
+   - Scan every `<w:r>` element in the DOCX for the presence of `<w:color w:val="000000"/>` in `<w:rPr>`.
+   - Scan `<w:docDefaults>` in `word/styles.xml` for `<w:color w:val="000000"/>` in `<w:rPrDefault><w:rPr>`.
+   - Any run missing the color attribute or with a value other than `000000` is a defect — fix and regenerate.
+   - This check must be done programmatically (Python/lxml), not by visual inspection.
+   - Report: "Color check: N runs, 0 non-black" (or list the defects).
+
 ### 9. Delivery Rules
 
 For DOCX requests:
@@ -384,13 +413,18 @@ If any of the following are detected after conversion:
 - Missing or unlinked references
 - TOC field not clickable
 - Page numbering broken
+- Text color not explicitly black (any run missing `w:color w:val="000000"`)
+- docDefaults color missing or not `000000`
+- Chinese fonts not applied (宋体/黑体 missing from `w:rFonts w:eastAsia`)
 
 Then execute this recovery sequence:
 
 1. Re-run Pandoc with the standard command from Section 7.
 2. Verify source Markdown UTF-8 encoding.
 3. Rebuild DOCX from clean Markdown.
-4. If the issue persists, isolate the affected section and regenerate it separately.
+4. Apply python-docx post-processing: set every run to explicit black, apply CN fonts, set docDefaults.
+5. Run the full verification checklist (Section 8) including the color integrity check.
+6. If the issue persists, isolate the affected section and regenerate it separately.
 
 ### 11. Word Compatibility Guarantee
 
@@ -414,3 +448,50 @@ If any marker appears, do not trust the preview. Re-read the original file with 
 - If asked for Markdown, output only the Markdown unless the user asks to see the prompt.
 - If asked for DOCX, output the final DOCX and a brief verification note.
 - If asked to update this skill, edit `SKILL.md` directly and verify it has no garbled text markers.
+
+## Environment Setup And Common Pitfalls
+
+### Pandoc Installation
+
+When Pandoc is not available on the target system:
+
+1. **Windows without admin rights**: Download the portable `.zip` release from `https://github.com/jgm/pandoc/releases` (not the `.msi` installer, which requires admin). Unzip and invoke via absolute path: `path/to/pandoc.exe paper.md -o output.docx`.
+2. **pandoc-crossref**: Download the matching release from `https://github.com/lierdakil/pandoc-crossref/releases` and place the `.exe` in the same directory as pandoc or in PATH.
+3. If pandoc-crossref is unavailable and the paper has no numbered equations/tables, the `--filter pandoc-crossref` flag can be safely omitted.
+
+### Shell Encoding Pitfall
+
+On Windows with Git Bash or similar environments, the shell may use GBK/CP936 code page by default. When Python prints UTF-8 Chinese text to stdout, it will appear garbled in the terminal. **This does NOT mean the DOCX content is garbled.** Always verify by:
+
+- Checking UTF-8 hex values of text: `text.encode('utf-8').hex()`
+- Running `python -c` commands that perform semantic matching (keyword presence), not visual inspection
+- Opening the DOCX in Word to visually confirm
+
+Do NOT "fix" text that only appears garbled in shell output. The mojibake check (Section 8.3) uses actual Unicode codepoint scanning, which is immune to shell encoding.
+
+### Python String Escaping In Bash
+
+When running inline Python via `bash -c "python -c '...'"`, backslashes in regex patterns get consumed by the shell before reaching Python. Symptoms:
+
+- `re.PatternError: bad escape \i` when using `r'\int'` in a pattern
+- `SyntaxWarning: invalid escape sequence` for `\s`, `\d`, etc.
+
+Solutions:
+
+- Double-escape: `r'\\\\int'` or `r'\\int'`
+- Prefer writing Python to a `.py` file and executing it, eliminating the shell escaping layer
+- Use simple substring `in` checks instead of regex when possible
+
+### DOCX Color Post-Processing
+
+Pandoc-generated DOCX files do NOT set explicit `w:color` on text runs; they rely on Word's default "auto" color. For Chinese academic papers, "auto" is not acceptable — black must be explicit. The post-processing sequence:
+
+1. Run Pandoc to generate a draft DOCX.
+2. Use python-docx to iterate every paragraph, every run, and add `<w:color w:val="000000"/>` to each `<w:rPr>`.
+3. Also fix `<w:docDefaults>` in `word/styles.xml` to include `<w:color w:val="000000"/>`, replace theme fonts with explicit 宋体/Times New Roman, and set `w:lang w:eastAsia="zh-CN"`.
+4. Run the color integrity check (Section 8.6) to confirm 0 non-black runs.
+5. Save and deliver.
+
+### Document Structure: Section Breaks vs Page Breaks
+
+python-docx has limited API support for inserting Word section breaks mid-document (each section needs its own `<w:sectPr>`). For simple papers, `<w:pageBreakBefore/>` on the target paragraph is a practical alternative that achieves visual page breaks without multi-section complexity. The trade-off: all pages share one page number format. For papers requiring different page number types (Roman for front matter, Arabic for body), multi-section XML manipulation or a tool like `pandoc` with a reference docx is needed.
